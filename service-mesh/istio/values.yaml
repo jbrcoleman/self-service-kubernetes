@@ -1,0 +1,264 @@
+global:
+  # Default hub for Istio images
+  hub: docker.io/istio
+  
+  # Default tag for Istio images
+  tag: 1.17.1
+  
+  # Specify image pull policy
+  imagePullPolicy: IfNotPresent
+  
+  # Default Istio mtls policy
+  mtls:
+    enabled: true
+    auto: true
+  
+  # Default Istio proxy settings
+  proxy:
+    image: proxyv2
+    
+    # Resources for the sidecar
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 2000m
+        memory: 1024Mi
+    
+    # Configures the access log for each sidecar
+    accessLogFile: "/dev/stdout"
+    
+    # Configure how and what tracing is enabled for the proxy
+    tracer: zipkin
+  
+  # Default Istio tracing settings
+  tracer:
+    # Configuration for the Zipkin tracer
+    zipkin:
+      address: zipkin.monitoring:9411
+  
+  # Default Istio proxy init settings
+  proxy_init:
+    # Required for running in AWS EKS
+    image: proxyv2
+  
+  # Configure kubernetes service hostnames
+  k8sIngress:
+    enabled: true
+    gatewayName: ingressgateway
+    enableHttps: true
+    
+  # Multi-cluster settings
+  multiCluster:
+    enabled: false
+
+# Istio pilot settings
+pilot:
+  enabled: true
+  
+  # Autoscaling settings
+  autoscaleEnabled: true
+  autoscaleMin: 1
+  autoscaleMax: 5
+  
+  # Resources for pilot
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2048Mi
+    limits:
+      cpu: 1000m
+      memory: 4096Mi
+  
+  # Environment variables for pilot
+  env:
+    PILOT_ENABLE_PROTOCOL_SNIFFING_FOR_OUTBOUND: true
+    PILOT_ENABLE_PROTOCOL_SNIFFING_FOR_INBOUND: true
+    PILOT_ENABLE_ANALYSIS: true
+    PILOT_HTTP10: "1"
+
+# Istio ingress gateway settings
+gateways:
+  istio-ingressgateway:
+    enabled: true
+    
+    # Number of ingress gateway replicas
+    replicaCount: 2
+    
+    # Autoscaling settings for gateway
+    autoscaleEnabled: true
+    autoscaleMin: 1
+    autoscaleMax: 5
+    
+    # Pod anti-affinity to spread across nodes
+    podAntiAffinityTermLabelSelector:
+      - key: app
+        operator: In
+        values:
+          - istio-ingressgateway
+    
+    # Type of service to use for ingress
+    serviceType: LoadBalancer
+    
+    # Configure AWS features for ingressgateway
+    serviceAnnotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+      service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+    
+    # Resources for ingress gateway
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 2000m
+        memory: 1024Mi
+    
+    # Ports exposed by the gateway
+    ports:
+      # HTTP port
+      - name: http
+        port: 80
+        targetPort: 8080
+      # HTTPS port
+      - name: https
+        port: 443
+        targetPort: 8443
+      # Status port
+      - name: status-port
+        port: 15021
+        targetPort: 15021
+    
+    # Use AWS NLB healthcheck
+    healthCheckCustom:
+      port: 15021
+  
+  istio-egressgateway:
+    enabled: true
+    
+    # Number of egress gateway replicas
+    replicaCount: 1
+    
+    # Autoscaling settings for egress gateway
+    autoscaleEnabled: true
+    autoscaleMin: 1
+    autoscaleMax: 3
+    
+    # Resources for egress gateway
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+# Istio CNI settings
+cni:
+  enabled: true
+  
+  # Resources for CNI
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    limits:
+      cpu: 100m
+      memory: 100Mi
+  
+  # Log level for CNI
+  logLevel: info
+
+# Telemetry settings
+telemetry:
+  enabled: true
+  v2:
+    enabled: true
+    prometheus:
+      enabled: true
+    stackdriver:
+      enabled: false
+
+# Security settings
+security:
+  # Configure security
+  enabled: true
+  
+  # Resources for citadel
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+# Sidecar injector settings
+sidecarInjectorWebhook:
+  enabled: true
+  
+  # Configure injector
+  rewriteAppHTTPProbe: true
+  
+  # Inject for all namespaces except excluded ones
+  enableNamespacesByDefault: true
+  
+  # Namespaces to exclude from injection
+  namespaceSelector:
+    matchExpressions:
+      - key: istio-injection
+        operator: NotIn
+        values:
+          - disabled
+      - key: name
+        operator: NotIn
+        values:
+          - kube-system
+          - kube-public
+          - istio-system
+          - cert-manager
+          - monitoring
+
+# Istio addon components
+tracing:
+  enabled: true
+  provider: zipkin
+  
+  # Jaeger settings
+  jaeger:
+    hub: docker.io/jaegertracing
+    tag: 1.38
+    
+  # Zipkin settings
+  zipkin:
+    hub: docker.io/openzipkin
+    tag: 2.23
+    
+  # Resources for tracing
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Prometheus settings
+prometheus:
+  # Use Prometheus from monitoring stack
+  enabled: false
+
+# Grafana settings
+grafana:
+  # Use Grafana from monitoring stack
+  enabled: false
+
+# Kiali settings
+kiali:
+  enabled: true
+  contextPath: /kiali
+  dashboard:
+    grafanaURL: http://grafana.monitoring:3000
+  prometheusAddr: http://prometheus-server.monitoring:9090

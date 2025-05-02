@@ -1,0 +1,155 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredresources
+  annotations:
+    description: Requires containers to have resource limits and requests set and within a specified range.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredResources
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            limits:
+              type: object
+              properties:
+                cpu:
+                  type: object
+                  properties:
+                    min:
+                      type: string
+                    max:
+                      type: string
+                memory:
+                  type: object
+                  properties:
+                    min:
+                      type: string
+                    max:
+                      type: string
+            requests:
+              type: object
+              properties:
+                cpu:
+                  type: object
+                  properties:
+                    min:
+                      type: string
+                    max:
+                      type: string
+                memory:
+                  type: object
+                  properties:
+                    min:
+                      type: string
+                    max:
+                      type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredresources
+
+        import data.lib.kubernetes
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not container_limits_provided(container)
+          msg := sprintf("Container %s must have resource limits defined", [container.name])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not container_requests_provided(container)
+          msg := sprintf("Container %s must have resource requests defined", [container.name])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          container_limits_provided(container)
+          cpu_limit_provided(container)
+          not valid_cpu_limit(container)
+          msg := sprintf("Container %s CPU limit must be between %s and %s", [container.name, input.parameters.limits.cpu.min, input.parameters.limits.cpu.max])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          container_limits_provided(container)
+          memory_limit_provided(container)
+          not valid_memory_limit(container)
+          msg := sprintf("Container %s memory limit must be between %s and %s", [container.name, input.parameters.limits.memory.min, input.parameters.limits.memory.max])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          container_requests_provided(container)
+          cpu_request_provided(container)
+          not valid_cpu_request(container)
+          msg := sprintf("Container %s CPU request must be between %s and %s", [container.name, input.parameters.requests.cpu.min, input.parameters.requests.cpu.max])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          container_requests_provided(container)
+          memory_request_provided(container)
+          not valid_memory_request(container)
+          msg := sprintf("Container %s memory request must be between %s and %s", [container.name, input.parameters.requests.memory.min, input.parameters.requests.memory.max])
+        }
+
+        container_limits_provided(container) {
+          container.resources.limits
+        }
+
+        container_requests_provided(container) {
+          container.resources.requests
+        }
+
+        cpu_limit_provided(container) {
+          container.resources.limits.cpu
+        }
+
+        memory_limit_provided(container) {
+          container.resources.limits.memory
+        }
+
+        cpu_request_provided(container) {
+          container.resources.requests.cpu
+        }
+
+        memory_request_provided(container) {
+          container.resources.requests.memory
+        }
+
+        valid_cpu_limit(container) {
+          cpu := container.resources.limits.cpu
+          min_cpu := input.parameters.limits.cpu.min
+          max_cpu := input.parameters.limits.cpu.max
+          kubernetes.compare_cpu(cpu, min_cpu) >= 0
+          kubernetes.compare_cpu(cpu, max_cpu) <= 0
+        }
+
+        valid_memory_limit(container) {
+          memory := container.resources.limits.memory
+          min_memory := input.parameters.limits.memory.min
+          max_memory := input.parameters.limits.memory.max
+          kubernetes.compare_memory(memory, min_memory) >= 0
+          kubernetes.compare_memory(memory, max_memory) <= 0
+        }
+
+        valid_cpu_request(container) {
+          cpu := container.resources.requests.cpu
+          min_cpu := input.parameters.requests.cpu.min
+          max_cpu := input.parameters.requests.cpu.max
+          kubernetes.compare_cpu(cpu, min_cpu) >= 0
+          kubernetes.compare_cpu(cpu, max_cpu) <= 0
+        }
+
+        valid_memory_request(container) {
+          memory := container.resources.requests.memory
+          min_memory := input.parameters.requests.memory.min
+          max_memory := input.parameters.requests.memory.max
+          kubernetes.compare_memory(memory, min_memory) >= 0
+          kubernetes.compare_memory(memory, max_memory) <= 0
+        }
